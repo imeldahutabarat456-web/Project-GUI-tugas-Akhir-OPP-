@@ -3,33 +3,31 @@
  * Click nbfs://nbhost/SystemFileSystem/Templates/GUIForms/JFrame.java to edit this template
  */
 package View;
-import javax.swing.DefaultComboBoxModel;
 
-import model.Student;
+import Controller.KRSController;
 import model.Course;
 import model.KRS;
-import model.Lecturer;
-
-
-
+import model.Student;
+import model.Lecturer; // Pastikan kelas Lecturer Anda ada di package model
+import javax.swing.JOptionPane;
+import javax.swing.DefaultComboBoxModel; // PERBAIKAN: Import yang kurang
+import javax.swing.table.DefaultTableModel; // PERBAIKAN: Import yang kurang
+import javax.swing.event.DocumentEvent; // PERBAIKAN: Import yang kurang
+import javax.swing.event.DocumentListener; // PERBAIKAN: Import yang kurang
 /**
  *
  * @author IMELDA
  */
-public class ImputNilai extends javax.swing.JFrame {
-  private final DefaultComboBoxModel<Student> comboModelStudent
-        = new DefaultComboBoxModel<>();  
-  private final DefaultComboBoxModel<Course> comboModelCourse
-        = new DefaultComboBoxModel<>();
+public class InputNilai extends javax.swing.JFrame {
+  private final Controller.KRSController krsController;
+  private final DefaultComboBoxModel<Student> comboModelStudent = new DefaultComboBoxModel<>();  
+    private final DefaultComboBoxModel<Course> comboModelCourse = new DefaultComboBoxModel<>();
+    private final DefaultComboBoxModel<String> ComboModelSemester = new DefaultComboBoxModel<>();
+    private final DefaultComboBoxModel<Lecturer> comboModelLecturer = new DefaultComboBoxModel<>();   
+    
+    private static final java.util.logging.Logger logger = java.util.logging.Logger.getLogger(InputNilai.class.getName());
 
-private final DefaultComboBoxModel<String> ComboModelSemester
-        = new DefaultComboBoxModel<>();
-
-private final DefaultComboBoxModel<Lecturer> comboModelLecturer
-        = new DefaultComboBoxModel<>();   
-private static final java.util.logging.Logger logger = java.util.logging.Logger.getLogger(ImputNilai.class.getName());
-
-// Variabel global penampung data aktif yang dipilih user
+    // Variabel global penampung data aktif yang dipilih user
     private Student selectedStudent;
     private Course selectedCourse;
     private KRS krs;
@@ -37,32 +35,124 @@ private static final java.util.logging.Logger logger = java.util.logging.Logger.
     /**
      * Creates new form ImputNilai
      */
-    public ImputNilai() {
+    public InputNilai() {
         initComponents();
+        krsController = new KRSController();
+    
+    // Tambahkan 2 baris ini agar NIM & Prodi tidak bisa diketik manual
+    jTextField1.setEditable(false);
+    jTextField6.setEditable(false);
+    jTextField5.setEditable(false);
+
         ComboModelSemester.addElement("Semester 1");
         ComboModelSemester.addElement("Semester 2");
         ComboModelSemester.addElement("Semester 3");
         ComboModelSemester.addElement("Semester 4");
+        ComboModelSemester.addElement("Semester 5");
+        ComboModelSemester.addElement("Semester 6");
+        ComboModelSemester.addElement("Semester 7");
+        ComboModelSemester.addElement("Semester 8");
         
         // 2. Mengisi Data Tiruan Mahasiswa
-        comboModelStudent.addElement(new Student("111", "2515101028","Imelda", "Sistem Informasi"));
-        comboModelStudent.addElement(new Student("112", "2511021029","Laudya" ,"Teknologi Pendidikan"));
+        comboModelStudent.addElement(new Student("111", "2515101028","Imelda", "Ilmu Komputer"));
+        comboModelStudent.addElement(new Student("112", "2511021029","Laudya" ,"Sistem Informasi"));
         
         // 3. Mengisi Data Tiruan Mata Kuliah
-        comboModelCourse.addElement(new Course("MK01", "Pemrograman Objek", 3, 3));
-        comboModelCourse.addElement(new Course("MK02", "Desain Antarmuka GUI", 2, 3));
+        comboModelCourse.addElement(new Course("MK01", "Pemrograman Objek", 3, "3"));
+        comboModelCourse.addElement(new Course("MK02", "Arsitektur dan Komputer", 2, "3"));
         
         // 4. Mengisi Data Tiruan Dosenss
         comboModelLecturer.addElement(new Lecturer("D01", "Ketut Agus Seputra, M.T.", "081923", "Software Engineering"));
-        comboModelLecturer.addElement(new Lecturer("D02", "wahyu adiguna, M.T.", "081945", "Komunikasi Data"));
+        comboModelLecturer.addElement(new Lecturer("D02", "wahyu a, M.T.", "081945", "Komunikasi Data"));
+        
+        jComboBox1.setModel(comboModelStudent);
+        jComboBox2.setModel(comboModelCourse);
+        jComboBox3.setModel(ComboModelSemester);
+        jComboBox4.setModel(comboModelLecturer);
         
         jComboBox1.addActionListener(e -> jComboBox1ActionPerformed(null));
         jComboBox2.addActionListener(e-> jComboBox2ActionPerformed(null));
         jComboBox3.addActionListener(e-> jComboBox3ActionPerformed(null));
-        
+        jComboBox4.addActionListener(e -> jComboBox4ActionPerformed(null));
         // Trigger awal jalankan aksi agar form otomatis terisi data indeks ke-0 saat dibuka
+        DocumentListener docListener = new DocumentListener() {
+            @Override public void insertUpdate(DocumentEvent e) { hitungKRS(); }
+            @Override public void removeUpdate(DocumentEvent e) { hitungKRS(); }
+            @Override public void changedUpdate(DocumentEvent e) { hitungKRS(); }
+        };
+        jTextField2.getDocument().addDocumentListener(docListener); // Sikap
+        jTextField3.getDocument().addDocumentListener(docListener); // UTS
+        jTextField4.getDocument().addDocumentListener(docListener); // UAS
+        
         jComboBox1ActionPerformed(null);
         jComboBox2ActionPerformed(null);
+        jComboBox4ActionPerformed(null);
+        
+        tampilDataKeTabel();
+    }
+
+    // Fungsi membaca data dari MySQL database dan menampilkannya ke JTable visual
+    private void tampilDataKeTabel() {
+        DefaultTableModel model = (DefaultTableModel) tableNilai.getModel();
+        model.setRowCount(0); // Bersihkan isi tabel visual terlebih dahulu
+
+        try {
+            java.sql.Connection conn = Config.Koneksi.getKoneksi();
+            if (conn == null) return;
+
+            String sql = "SELECT nim, kode_mk, semester, nilai_akhir, nilai_huruf FROM krs";
+            
+            try (java.sql.PreparedStatement ps = conn.prepareStatement(sql);
+                 java.sql.ResultSet rs = ps.executeQuery()) {
+                
+                while (rs.next()) {
+                    String namaMhs = rs.getString("nim");
+                    String namaMK = rs.getString("kode_mk");
+                    
+                    // COCOKKAN DENGAN DATA DUMMY AGAR TAMPILAN NAMA BAGUS
+                    if(rs.getString("nim").equals("2515101028")) namaMhs = "Imelda";
+                    else if(rs.getString("nim").equals("2511021029")) namaMhs = "Laudya";
+                    
+                    if(rs.getString("kode_mk").equals("MK01")) namaMK = "Pemrograman Objek";
+                    else if(rs.getString("kode_mk").equals("MK02")) namaMK = "Arsitektur dan Komputer";
+
+                    model.addRow(new Object[]{
+                        namaMhs,
+                        namaMK,
+                        rs.getString("semester"),
+                        rs.getDouble("nilai_akhir"),
+                        rs.getString("nilai_huruf")
+                    });
+                }
+            }
+        } catch (java.sql.SQLException e) {
+            System.err.println("Gagal memuat data ke tabel visual: " + e.getMessage());
+        }
+    
+    }
+    private void hitungKRS() {
+        try {
+            if (jTextField2.getText().trim().isEmpty() || jTextField3.getText().trim().isEmpty() || jTextField4.getText().trim().isEmpty()) {
+                jTextField5.setText("-");
+                this.krs = null;
+                return;
+            }
+            double sikap = Double.parseDouble(jTextField2.getText().trim());
+            double uts = Double.parseDouble(jTextField3.getText().trim());
+            double uas = Double.parseDouble(jTextField4.getText().trim());
+            
+            if (jComboBox3.getSelectedItem() == null) return;
+            String semester = jComboBox3.getSelectedItem().toString();
+            
+            if (selectedStudent != null && selectedCourse != null) {
+                // Rumus kalkulasi otomatis objek model KRS
+                this.krs = new KRS(selectedStudent, selectedCourse, semester, sikap, uts, uas);
+                jTextField5.setText(krs.getNilaiHuruf());
+            }
+        } catch (NumberFormatException e) {
+            jTextField5.setText("-");
+            this.krs = null;
+        }
     }
 
     /**
@@ -71,7 +161,7 @@ private static final java.util.logging.Logger logger = java.util.logging.Logger.
      * regenerated by the Form Editor.
      */
     @SuppressWarnings("unchecked")
-    // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
+    // <editor-fold defaultstate="collapsed" desc="Generated Code">                          
     private void initComponents() {
 
         jLabel1 = new javax.swing.JLabel();
@@ -81,6 +171,8 @@ private static final java.util.logging.Logger logger = java.util.logging.Logger.
         jLabel4 = new javax.swing.JLabel();
         jComboBox1 = new javax.swing.JComboBox<>();
         jTextField1 = new javax.swing.JTextField();
+        jLabel14 = new javax.swing.JLabel();
+        jTextField6 = new javax.swing.JTextField();
         jPanel2 = new javax.swing.JPanel();
         jLabel5 = new javax.swing.JLabel();
         jLabel6 = new javax.swing.JLabel();
@@ -88,8 +180,6 @@ private static final java.util.logging.Logger logger = java.util.logging.Logger.
         jLabel8 = new javax.swing.JLabel();
         jLabel9 = new javax.swing.JLabel();
         jLabel10 = new javax.swing.JLabel();
-        jLabel11 = new javax.swing.JLabel();
-        jLabel12 = new javax.swing.JLabel();
         jTextField2 = new javax.swing.JTextField();
         jLabel13 = new javax.swing.JLabel();
         jTextField3 = new javax.swing.JTextField();
@@ -114,6 +204,10 @@ private static final java.util.logging.Logger logger = java.util.logging.Logger.
 
         jComboBox1.setModel(comboModelStudent);
 
+        jLabel14.setText("Prodi");
+
+        jTextField6.addActionListener(this::jTextField6ActionPerformed);
+
         javax.swing.GroupLayout jPanel1Layout = new javax.swing.GroupLayout(jPanel1);
         jPanel1.setLayout(jPanel1Layout);
         jPanel1Layout.setHorizontalGroup(
@@ -125,12 +219,14 @@ private static final java.util.logging.Logger logger = java.util.logging.Logger.
                     .addGroup(jPanel1Layout.createSequentialGroup()
                         .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                             .addComponent(jLabel3)
-                            .addComponent(jLabel4))
+                            .addComponent(jLabel4)
+                            .addComponent(jLabel14))
                         .addGap(38, 38, 38)
                         .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(jTextField1, javax.swing.GroupLayout.PREFERRED_SIZE, 71, javax.swing.GroupLayout.PREFERRED_SIZE)
-                            .addComponent(jComboBox1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))))
-                .addContainerGap(57, Short.MAX_VALUE))
+                            .addComponent(jTextField6)
+                            .addComponent(jTextField1)
+                            .addComponent(jComboBox1, 0, 123, Short.MAX_VALUE))))
+                .addContainerGap())
         );
         jPanel1Layout.setVerticalGroup(
             jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -145,7 +241,11 @@ private static final java.util.logging.Logger logger = java.util.logging.Logger.
                 .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(jLabel4)
                     .addComponent(jTextField1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addContainerGap(28, Short.MAX_VALUE))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(jLabel14)
+                    .addComponent(jTextField6, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addContainerGap())
         );
 
         jLabel5.setText("Informasi Mahasiswa");
@@ -158,11 +258,7 @@ private static final java.util.logging.Logger logger = java.util.logging.Logger.
 
         jLabel9.setText("Dosen");
 
-        jLabel10.setText("Sikap");
-
-        jLabel11.setText("UTS");
-
-        jLabel12.setText("UAS");
+        jLabel10.setText("Nilai");
 
         jTextField2.addActionListener(this::jTextField2ActionPerformed);
 
@@ -177,6 +273,7 @@ private static final java.util.logging.Logger logger = java.util.logging.Logger.
         jComboBox3.setModel(ComboModelSemester);
 
         jComboBox4.setModel(comboModelLecturer);
+        jComboBox4.addActionListener(this::jComboBox4ActionPerformed);
 
         jButton1.setText("btnSimpan");
         jButton1.addActionListener(this::jButton1ActionPerformed);
@@ -187,43 +284,33 @@ private static final java.util.logging.Logger logger = java.util.logging.Logger.
             jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanel2Layout.createSequentialGroup()
                 .addContainerGap()
-                .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel2Layout.createSequentialGroup()
-                        .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
-                            .addGroup(jPanel2Layout.createSequentialGroup()
-                                .addGap(0, 0, Short.MAX_VALUE)
-                                .addComponent(jTextField2, javax.swing.GroupLayout.PREFERRED_SIZE, 71, javax.swing.GroupLayout.PREFERRED_SIZE))
-                            .addGroup(jPanel2Layout.createSequentialGroup()
-                                .addComponent(jLabel12)
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                                .addComponent(jTextField4, javax.swing.GroupLayout.PREFERRED_SIZE, 71, javax.swing.GroupLayout.PREFERRED_SIZE))
-                            .addGroup(jPanel2Layout.createSequentialGroup()
-                                .addComponent(jLabel11)
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                                .addComponent(jTextField3, javax.swing.GroupLayout.PREFERRED_SIZE, 71, javax.swing.GroupLayout.PREFERRED_SIZE)))
-                        .addGap(236, 236, 236))
+                .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                    .addComponent(jLabel5)
+                    .addComponent(jLabel7)
+                    .addGroup(jPanel2Layout.createSequentialGroup()
+                        .addComponent(jLabel10)
+                        .addGap(75, 75, 75)
+                        .addComponent(jTextField2, javax.swing.GroupLayout.PREFERRED_SIZE, 46, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addGap(18, 18, 18)
+                        .addComponent(jTextField3, javax.swing.GroupLayout.PREFERRED_SIZE, 41, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addGap(29, 29, 29)
+                        .addComponent(jTextField4, javax.swing.GroupLayout.PREFERRED_SIZE, 44, javax.swing.GroupLayout.PREFERRED_SIZE))
+                    .addGroup(jPanel2Layout.createSequentialGroup()
+                        .addGap(131, 131, 131)
+                        .addComponent(jButton1))
+                    .addGroup(jPanel2Layout.createSequentialGroup()
+                        .addComponent(jLabel6)
+                        .addGap(131, 131, 131)
+                        .addComponent(jComboBox2, javax.swing.GroupLayout.PREFERRED_SIZE, 111, javax.swing.GroupLayout.PREFERRED_SIZE))
                     .addGroup(jPanel2Layout.createSequentialGroup()
                         .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(jLabel5)
-                            .addComponent(jLabel7)
-                            .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING, false)
-                                .addComponent(jLabel10, javax.swing.GroupLayout.Alignment.LEADING)
-                                .addGroup(javax.swing.GroupLayout.Alignment.LEADING, jPanel2Layout.createSequentialGroup()
-                                    .addComponent(jLabel9)
-                                    .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                                    .addComponent(jComboBox4, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                                .addGroup(javax.swing.GroupLayout.Alignment.LEADING, jPanel2Layout.createSequentialGroup()
-                                    .addComponent(jLabel8)
-                                    .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                                    .addComponent(jComboBox3, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                                .addGroup(javax.swing.GroupLayout.Alignment.LEADING, jPanel2Layout.createSequentialGroup()
-                                    .addComponent(jLabel6)
-                                    .addGap(131, 131, 131)
-                                    .addComponent(jComboBox2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)))
-                            .addGroup(jPanel2Layout.createSequentialGroup()
-                                .addGap(131, 131, 131)
-                                .addComponent(jButton1)))
-                        .addContainerGap(146, Short.MAX_VALUE))))
+                            .addComponent(jLabel9)
+                            .addComponent(jLabel8))
+                        .addGap(143, 143, 143)
+                        .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addComponent(jComboBox3, 0, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                            .addComponent(jComboBox4, 0, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))))
+                .addContainerGap(47, Short.MAX_VALUE))
             .addGroup(jPanel2Layout.createSequentialGroup()
                 .addComponent(jLabel13)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
@@ -252,16 +339,10 @@ private static final java.util.logging.Logger logger = java.util.logging.Logger.
                 .addGap(21, 21, 21)
                 .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(jLabel10)
-                    .addComponent(jTextField2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addGap(9, 9, 9)
-                .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(jLabel11)
-                    .addComponent(jTextField3, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addGap(9, 9, 9)
-                .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(jLabel12)
+                    .addComponent(jTextField2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(jTextField3, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(jTextField4, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 23, Short.MAX_VALUE)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 85, Short.MAX_VALUE)
                 .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                         .addComponent(jLabel13)
@@ -300,14 +381,14 @@ private static final java.util.logging.Logger logger = java.util.logging.Logger.
             .addGroup(layout.createSequentialGroup()
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(layout.createSequentialGroup()
+                        .addGap(316, 316, 316)
+                        .addComponent(jLabel1))
+                    .addGroup(layout.createSequentialGroup()
                         .addGap(20, 20, 20)
                         .addComponent(jPanel1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addGap(38, 38, 38)
-                        .addComponent(jPanel2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                    .addGroup(layout.createSequentialGroup()
-                        .addGap(316, 316, 316)
-                        .addComponent(jLabel1)))
-                .addContainerGap(154, Short.MAX_VALUE))
+                        .addComponent(jPanel2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)))
+                .addContainerGap(174, Short.MAX_VALUE))
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -324,21 +405,23 @@ private static final java.util.logging.Logger logger = java.util.logging.Logger.
         );
 
         pack();
-    }// </editor-fold>//GEN-END:initComponents
+    }// </editor-fold>                        
 
-    private void jComboBox1ActionPerformed(java.awt.event.ActionEvent evt) {                                           
-        selectedStudent = (Student) jComboBox1.getSelectedItem();
-        if (selectedStudent != null) {
-            jTextField1.setText(selectedStudent.getNim());
-        }
-    }                                          
+    private void jComboBox1ActionPerformed(java.awt.event.ActionEvent evt) {
+    selectedStudent = (Student) jComboBox1.getSelectedItem();
 
-    private void jTextField2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jTextField2ActionPerformed
+    if (selectedStudent != null) {
+        jTextField1.setText(selectedStudent.getNim());
+        jTextField6.setText(selectedStudent.getProdi());
+    }
+}                                     
+
+    private void jTextField2ActionPerformed(java.awt.event.ActionEvent evt) {                                            
       selectedCourse = (Course) jComboBox2.getSelectedItem();
         if (selectedCourse != null) {
             jLabel7.setText("Kode: " + selectedCourse.getKode() + " | SKS: " + selectedCourse.getSks());
         }  // TODO add your handling code here:
-    }//GEN-LAST:event_jTextField2ActionPerformed
+    }                                           
 
 
     private void jComboBox2ActionPerformed(java.awt.event.ActionEvent evt) {                                           
@@ -351,100 +434,45 @@ private static final java.util.logging.Logger logger = java.util.logging.Logger.
     private void jComboBox3ActionPerformed(java.awt.event.ActionEvent evt ) {                                           
         hitungKRS();
     }                                          
-
-    private void hitungKRS() {
-        try {
-            if(jTextField2.getText().trim().isEmpty() || jTextField3.getText().trim().isEmpty() || jTextField4.getText().trim().isEmpty()) {
-                jTextField5.setText("-");
-                this.krs = null;
-                return;
-            
-        }
-            double sikap = Double.parseDouble(jTextField2.getText().trim());
-            double uts = Double.parseDouble(jTextField3.getText().trim());
-            double uas = Double.parseDouble(jTextField4.getText().trim());
-            
-            String semester = jComboBox3.getSelectedItem().toString();
-            
-           this.krs = new KRS(selectedStudent, selectedCourse, semester, sikap, uts, uas);
-            
-            jTextField5.setText(krs.getNilaiHuruf());
-        } catch (NumberFormatException e) {
-            jTextField5.setText("-");
-            this.krs = null;
-        }
-    }
-    private void jTextField5ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jTextField5ActionPerformed
+    
+    private void jTextField5ActionPerformed(java.awt.event.ActionEvent evt) {                                            
 hitungKRS(); // Hitung ulang memastikan data tersinkronisasi
-         
-         if (selectedStudent != null && this.krs != null) {
-            javax.swing.table.DefaultTableModel model = (javax.swing.table.DefaultTableModel) tableNilai.getModel();
-            // Menyusun data baris baru dari objek model yang valid
-            Object[] rowData = {
-                krs.getStudent().getNama(),
-                krs.getCourse().getNamaMK(),
-                krs.getSemester(),
-                String.valueOf(krs.getNilaiAkhir()),
-                krs.getNilaiHuruf()
-            };
+       
+    // TODO add your handling code here:
+    }                                           
+
+    private void jTextField3ActionPerformed(java.awt.event.ActionEvent evt) {                                            
+hitungKRS();
+    }                                           
+
+    private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {                                         
+      hitungKRS();
+        
+        if (selectedStudent != null && selectedCourse != null && this.krs != null) {
             
-            model.addRow(rowData); // Masukkan data ke baris tabel baru
+            // Panggil Controller untuk simpan ke database MySQL
+            krsController.simpanDataNilai(this, this.krs);
             
-            // Mengosongkan form input nilai kembali setelah berhasil masuk tabel
+            // Bersihkan form input angka
             jTextField2.setText("");
             jTextField3.setText("");
             jTextField4.setText("");
             jTextField5.setText("-");
-            this.krs = null;
             
-            javax.swing.JOptionPane.showMessageDialog(this, "Data Nilai Berhasil Dimasukkan ke Tabel!");
+            // Segarkan ulang visual tabel JTable
+            tampilDataKeTabel();
         } else {
-            
-            javax.swing.JOptionPane.showMessageDialog(this,
-                 "Gagal! Pastikan data mahasiswa dipilih dan nilai Sikap, UTS, UAS diisi dengan angka valid.", 
-                "Error", 
-                javax.swing.JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Data belum lengkap atau format nilai angka salah!", "Peringatan", JOptionPane.WARNING_MESSAGE);
         }
-    // TODO add your handling code here:
-    }//GEN-LAST:event_jTextField5ActionPerformed
+    }                                        
 
-    private void jTextField3ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jTextField3ActionPerformed
-hitungKRS();
-    }//GEN-LAST:event_jTextField3ActionPerformed
+    private void jTextField6ActionPerformed(java.awt.event.ActionEvent evt) {                                            
+        // TODO add your handling code here:
+    }                                           
 
-    private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton1ActionPerformed
-                                       
-    hitungKRS();
-
-    // Pastikan data sudah lengkap
-    if (selectedStudent != null && selectedCourse != null && krs != null) {
-
-        javax.swing.table.DefaultTableModel model =
-                (javax.swing.table.DefaultTableModel) tableNilai.getModel();
-
-        model.addRow(new Object[]{
-            selectedStudent.getNama(),
-            selectedCourse.getNamaMK(),
-            krs.getSemester(),
-            krs.getNilaiAkhir(),
-            krs.getNilaiHuruf()
-        });
-        jTextField2.setText("");
-        jTextField3.setText("");
-        jTextField4.setText("");
-        jTextField5.setText("");
-
-    } else {
-        javax.swing.JOptionPane.showMessageDialog(
-                this,
-                "Data belum lengkap!",
-                "Peringatan",
-                javax.swing.JOptionPane.WARNING_MESSAGE
-        );
-    }
-
-// TODO add your handling code here:
-    }//GEN-LAST:event_jButton1ActionPerformed
+    private void jComboBox4ActionPerformed(java.awt.event.ActionEvent evt) {                                           
+    selectedLecturer = (Lecturer) jComboBox4.getSelectedItem();
+    }                                          
 
     public static void main(String args[]) {
         try {
@@ -460,12 +488,12 @@ hitungKRS();
 
       
         java.awt.EventQueue.invokeLater(() -> {
-            new ImputNilai().setVisible(true);
-        });/* Create and display the form */
+            new InputNilai().setVisible(true);
         
+ });
     }
 
-    // Variables declaration - do not modify//GEN-BEGIN:variables
+    // Variables declaration - do not modify                     
     private javax.swing.JButton jButton1;
     private javax.swing.JComboBox<Student> jComboBox1;
     private javax.swing.JComboBox<Course> jComboBox2;
@@ -473,9 +501,8 @@ hitungKRS();
     private javax.swing.JComboBox<Lecturer> jComboBox4;
     private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel jLabel10;
-    private javax.swing.JLabel jLabel11;
-    private javax.swing.JLabel jLabel12;
     private javax.swing.JLabel jLabel13;
+    private javax.swing.JLabel jLabel14;
     private javax.swing.JLabel jLabel2;
     private javax.swing.JLabel jLabel3;
     private javax.swing.JLabel jLabel4;
@@ -492,6 +519,7 @@ hitungKRS();
     private javax.swing.JTextField jTextField3;
     private javax.swing.JTextField jTextField4;
     private javax.swing.JTextField jTextField5;
+    private javax.swing.JTextField jTextField6;
     private javax.swing.JTable tableNilai;
-    // End of variables declaration//GEN-END:variables
+    // End of variables declaration                   
 }
