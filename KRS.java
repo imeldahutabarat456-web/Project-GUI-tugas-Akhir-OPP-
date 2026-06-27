@@ -67,4 +67,15 @@ public class KRS {
     public String getSemester() {
         return semester;
     }
+    public double getNilaiSikap() {
+        return sikap;
+    }
+
+    public double getNilaiUts() {
+        return uts;
+    }
+
+    public double getNilaiUas() {
+        return uas;
+    }
 }
