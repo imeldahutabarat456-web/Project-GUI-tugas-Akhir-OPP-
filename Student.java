@@ -46,6 +46,13 @@ public class Student {
     public ArrayList<KRS> getDaftarKRS() {
         return daftarKRS;
     }
+     public void setIdCard(String idCard) {
+        this.idCard = idCard;
+    }
+
+    public void setNim(String nim) {
+        this.nim = nim;
+    }
 
 
     @Override
