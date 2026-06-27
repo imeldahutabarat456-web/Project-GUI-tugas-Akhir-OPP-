@@ -14,12 +14,14 @@ public class Course {
     private String namaMK;
     private int sks;
     private int semester;
+     public Course() {
+    }
 
     public Course(String kode, String namaMK, int sks,int semester) {
         this.kode = kode;
         this.namaMK = namaMK;
         this.sks = sks;
-        this.semester = semester;
+        this.semesterAngka = semesterAngka;
     }
 
     public String getKode() {
@@ -33,8 +35,11 @@ public class Course {
     public int getSks() {
         return sks;
     }
-    public int getSemester() {
-        return semester;
+    public int getSemesterAngka() {
+        return semesterAngka;
+    }
+    public void setSemesterAngka(String semesterAngka) {
+        this.semesterAngka = semesterAngka;
     }
 
     @Override
